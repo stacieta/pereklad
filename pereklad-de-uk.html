@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Синхронний переклад DE→UK</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --surface:#ffffff; --fg:#14181f; --muted:#667085; --line:#e1e4ea;
+    --accent:#2457d6; --accent-fg:#ffffff; --stop:#d92d3a;
+    --uk-bg:#fff6cc; --uk-fg:#2a2300;
+    --fs:20px;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0f1218; --surface:#171b23; --fg:#e8ebf1; --muted:#8e97a8; --line:#262c38;
+      --accent:#6b94ff; --accent-fg:#0b1020; --stop:#ff5a65;
+      --uk-bg:#2b2610; --uk-fg:#ffe98a;
+      color-scheme:dark;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--fg);
+    font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    display:flex;flex-direction:column;
+  }
+  header{
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    padding:12px max(16px,env(safe-area-inset-left)) 12px max(16px,env(safe-area-inset-right));
+    padding-top:max(12px,env(safe-area-inset-top));
+    background:var(--surface);border-bottom:1px solid var(--line);
+  }
+  h1{margin:0;font-size:1.05rem;font-weight:650;flex:1 1 180px}
+  .status{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--muted)}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--muted)}
+  .status.on .dot{background:var(--stop);animation:pulse 1.2s ease-in-out infinite}
+  .status.err{color:var(--stop)}
+  @keyframes pulse{50%{opacity:.35}}
+  @media (prefers-reduced-motion:reduce){.status.on .dot{animation:none}}
+
+  button,select{
+    font:inherit;color:var(--fg);background:var(--surface);
+    border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;
+  }
+  button:hover{border-color:var(--muted)}
+  button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  #toggle{background:var(--accent);color:var(--accent-fg);border-color:transparent;font-weight:650;padding:10px 20px}
+  #toggle.stop{background:var(--stop);color:#fff}
+
+  #log{
+    flex:1;overflow:auto;min-height:0;
+    padding:0 max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left));
+  }
+  .cols{
+    position:sticky;top:0;z-index:2;background:var(--bg);
+    display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:10px 0;
+    font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+    border-bottom:1px solid var(--line);
+  }
+  .row{
+    display:grid;grid-template-columns:1fr 1fr;gap:24px;
+    padding:14px 0;border-bottom:1px solid var(--line);
+  }
+  .de,.uk{min-width:0;overflow-wrap:anywhere}
+  .de{font-size:var(--fs)}
+  .uk{font-size:calc(var(--fs)*1.05);font-weight:550;color:var(--uk-fg);background:var(--uk-bg);padding:6px 10px;align-self:start}
+  .uk:empty{background:transparent}
+  .row.live .de,.row.live .uk{opacity:.6}
+  .row.fail .uk{font-weight:400;font-style:italic}
+
+  #empty{max-width:46ch;margin:40px auto;color:var(--muted);text-align:center}
+  #empty strong{color:var(--fg)}
+
+  footer{
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:10px max(16px,env(safe-area-inset-right)) 10px max(16px,env(safe-area-inset-left));
+    padding-bottom:max(10px,env(safe-area-inset-bottom));
+    background:var(--surface);border-top:1px solid var(--line);font-size:.9rem;
+  }
+  footer label{display:flex;align-items:center;gap:6px;color:var(--muted)}
+  .spacer{flex:1}
+  #toast{
+    position:fixed;left:50%;bottom:calc(72px + env(safe-area-inset-bottom));transform:translateX(-50%);
+    background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:.9rem;
+    opacity:0;pointer-events:none;transition:opacity .2s;
+  }
+  #toast.show{opacity:1}
+
+  @media (max-width:640px){
+    .cols{display:none}
+    .row{grid-template-columns:1fr;gap:6px}
+    .de{color:var(--muted);font-size:calc(var(--fs)*.85)}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Синхронний переклад: німецька → українська</h1>
+  <div class="status" id="status"><i class="dot"></i><span>Готово</span></div>
+  <select id="dialect" aria-label="Варіант німецької">
+    <option value="de-AT">Deutsch (Österreich)</option>
+    <option value="de-DE">Deutsch (Deutschland)</option>
+    <option value="de-CH">Deutsch (Schweiz)</option>
+  </select>
+  <button id="toggle">Слухати</button>
+</header>
+
+<main id="log" aria-live="polite">
+  <div class="cols"><div>Deutsch</div><div>Українська</div></div>
+  <div id="empty">
+    <p><strong>Натисніть «Слухати»</strong> і дозвольте доступ до мікрофона.</p>
+    <p>Німецька мова з’являтиметься текстом ліворуч, а український переклад — праворуч, поки людина ще говорить.</p>
+    <p>Потрібен інтернет. Працює в Chrome, Edge та Safari.</p>
+  </div>
+</main>
+
+<footer>
+  <button id="smaller" aria-label="Менший шрифт">A−</button>
+  <button id="bigger" aria-label="Більший шрифт">A+</button>
+  <label><input type="checkbox" id="auto" checked> Автопрокрутка</label>
+  <span class="spacer"></span>
+  <button id="copy">Копіювати</button>
+  <button id="save">Зберегти .txt</button>
+  <button id="clear">Очистити</button>
+</footer>
+
+<div id="toast" role="status"></div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const log = $('#log'), empty = $('#empty'), btn = $('#toggle'),
+        statusEl = $('#status'), dialect = $('#dialect'), auto = $('#auto');
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  let rec = null, want = false, restartDelay = 250;
+  let liveRow = null, liveTimer = null, liveSeq = 0;
+  let lastFinal = '', lastFinalAt = 0, wake = null;
+  const pairs = [];
+  const cache = new Map();
+
+  // ---------- UI helpers ----------
+  function setStatus(text, state) {
+    statusEl.querySelector('span').textContent = text;
+    statusEl.classList.toggle('on', state === 'on');
+    statusEl.classList.toggle('err', state === 'err');
+  }
+  function ui() {
+    btn.textContent = want ? 'Зупинити' : 'Слухати';
+    btn.classList.toggle('stop', want);
+  }
+  let toastTimer;
+  function toast(t) {
+    const el = $('#toast'); el.textContent = t; el.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 1600);
+  }
+  function stick() { if (auto.checked) log.scrollTop = log.scrollHeight; }
+
+  function newRow() {
+    empty.hidden = true;
+    const row = document.createElement('div');
+    row.className = 'row live';
+    const de = document.createElement('div'); de.className = 'de';
+    const uk = document.createElement('div'); uk.className = 'uk';
+    row.append(de, uk);
+    log.append(row);
+    return row;
+  }
+
+  // ---------- Translation ----------
+  async function viaGoogle(t) {
+    const r = await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=de&tl=uk&dt=t&q=' + encodeURIComponent(t));
+    if (!r.ok) throw new Error('google ' + r.status);
+    const j = await r.json();
+    const out = j[0].map(x => x[0]).join('');
+    if (!out) throw new Error('empty');
+    return out;
+  }
+  async function viaMyMemory(t) {
+    const r = await fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(t) + '&langpair=de|uk');
+    if (!r.ok) throw new Error('mymemory ' + r.status);
+    const j = await r.json();
+    const out = j.responseData && j.responseData.translatedText;
+    if (!out || /MYMEMORY WARNING/i.test(out)) throw new Error('mymemory quota');
+    return out;
+  }
+  async function translate(text) {
+    if (cache.has(text)) return cache.get(text);
+    let out;
+    try { out = await viaGoogle(text); }
+    catch { out = await viaMyMemory(text); }
+    cache.set(text, out);
+    return out;
+  }
+
+  // ---------- Transcript rows ----------
+  function setLive(text) {
+    if (!liveRow) liveRow = newRow();
+    liveRow.firstChild.textContent = text;
+    stick();
+    const seq = ++liveSeq, row = liveRow;
+    clearTimeout(liveTimer);
+    liveTimer = setTimeout(async () => {
+      try {
+        const t = await translate(text);
+        if (seq === liveSeq && row === liveRow) { row.lastChild.textContent = t; stick(); }
+      } catch {}
+    }, 450);
+  }
+
+  async function finalize(text) {
+    text = text.trim();
+    if (!text) return;
+    const now = Date.now();
+    if (text === lastFinal && now - lastFinalAt < 2000) return;
+    lastFinal = text; lastFinalAt = now;
+    clearTimeout(liveTimer); liveSeq++;
+    const row = liveRow || newRow();
+    liveRow = null;
+    row.firstChild.textContent = text;
+    row.classList.remove('live');
+    stick();
+    const pair = { de: text, uk: '' };
+    pairs.push(pair);
+    try {
+      pair.uk = await translate(text);
+      row.lastChild.textContent = pair.uk;
+    } catch {
+      pair.uk = '(не вдалося перекласти)';
+      row.lastChild.textContent = pair.uk;
+      row.classList.add('fail');
+    }
+    stick();
+  }
+
+  // ---------- Speech recognition ----------
+  function startRec() {
+    rec = new SR();
+    rec.lang = dialect.value;
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+
+    rec.onstart = () => { restartDelay = 250; setStatus('Слухаю…', 'on'); };
+    rec.onresult = e => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) finalize(r[0].transcript);
+        else interim += r[0].transcript;
+      }
+      if (interim.trim()) setLive(interim.trim());
+    };
+    rec.onerror = e => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        want = false; setStatus('Немає доступу до мікрофона', 'err');
+      } else if (e.error === 'audio-capture') {
+        want = false; setStatus('Мікрофон не знайдено', 'err');
+      } else if (e.error === 'network') {
+        restartDelay = 2000; setStatus('Немає зв’язку з розпізнаванням', 'err');
+      } else {
+        setStatus('Помилка: ' + e.error, 'err');
+      }
+    };
+    rec.onend = () => {
+      if (liveRow) finalize(liveRow.firstChild.textContent);
+      if (want) {
+        setTimeout(() => { if (want) { try { startRec(); } catch {} } }, restartDelay);
+      } else {
+        if (!statusEl.classList.contains('err')) setStatus('Зупинено');
+        ui();
+        releaseWake();
+      }
+    };
+    rec.start();
+  }
+
+  async function lockWake() {
+    try {
+      wake = await navigator.wakeLock.request('screen');
+      wake.addEventListener('release', () => { wake = null; });
+    } catch {}
+  }
+  function releaseWake() { try { wake && wake.release(); } catch {} wake = null; }
+  document.addEventListener('visibilitychange', () => {
+    if (want && document.visibilityState === 'visible' && !wake) lockWake();
+  });
+
+  btn.onclick = () => {
+    if (want) {
+      want = false; ui();
+      if (rec) rec.stop();
+    } else {
+      want = true; ui(); setStatus('Запускаю…');
+      startRec(); lockWake();
+    }
+  };
+  dialect.onchange = () => { if (want && rec) rec.stop(); }; // onend перезапустить з новою мовою
+
+  // ---------- Toolbar ----------
+  let fs = 20;
+  try { fs = +localStorage.getItem('fs') || 20; } catch {}
+  function applyFs() {
+    fs = Math.max(14, Math.min(44, fs));
+    document.documentElement.style.setProperty('--fs', fs + 'px');
+    try { localStorage.setItem('fs', fs); } catch {}
+  }
+  applyFs();
+  $('#smaller').onclick = () => { fs -= 2; applyFs(); };
+  $('#bigger').onclick = () => { fs += 2; applyFs(); };
+
+  const asText = () => pairs.map(p => 'DE: ' + p.de + '\nUK: ' + p.uk).join('\n\n');
+  $('#copy').onclick = async () => {
+    if (!pairs.length) return toast('Поки нічого копіювати');
+    try { await navigator.clipboard.writeText(asText()); toast('Скопійовано'); }
+    catch { toast('Не вдалося скопіювати'); }
+  };
+  $('#save').onclick = () => {
+    if (!pairs.length) return toast('Поки нічого зберігати');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([asText()], { type: 'text/plain;charset=utf-8' }));
+    a.download = 'pereklad-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.txt';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  $('#clear').onclick = () => {
+    pairs.length = 0; liveRow = null; liveSeq++;
+    log.querySelectorAll('.row').forEach(r => r.remove());
+    empty.hidden = false;
+  };
+
+  if (!SR) {
+    btn.disabled = true; dialect.disabled = true;
+    empty.innerHTML = '<p><strong>Цей браузер не підтримує розпізнавання мовлення.</strong></p><p>Відкрийте файл у Chrome, Edge або Safari.</p>';
+    setStatus('Не підтримується', 'err');
+  }
+})();
+</script>
+</body>
+</html>
